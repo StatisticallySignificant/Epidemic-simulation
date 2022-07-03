@@ -2,131 +2,194 @@ import pygame, random
 from pygame.locals import *
 from People import create_people
 from matplot import *
+from matplotlib import pyplot as plt
 
 pygame.init()
 running = True
 
+# Colors
+white = (255,255,255)
+light_grey = (245,245,245)
+red = (255,0,0)
+green = (0,255,0)
+blue = (0,0,255)
+black = (0,0,0)
+
 # Screen, size, title, background color
-screen_size = [800,600]
-screen = pygame.display.set_mode(screen_size)
+total_screen_size = [1200,600]
+screen = pygame.display.set_mode(total_screen_size)
 pygame.display.set_caption("Epidemic is running")
-screen.fill((255,255,255))
+screen.fill(white)
 
 # Create 2 groups of sprites
 people_group = pygame.sprite.Group()
 test_collide_group = pygame.sprite.Group()
 
-# Handle time
+# Handle time and time counters
 clock = pygame.time.Clock()
-time_in_game, last_data_collect = 0,0
+time_in_game, last_data_collect, last_display = 0,0,0
 
-# People's attribute
-people_speed = 0.1
-people_dimensions = (10,10)
+# Population
+population_size = 10
+
+# Epidemic parameters
+standard_infection_duration = 4000
+standard_time_before_death = 3000
+probability_to_die = 3 # in percent
+initial_infection_probability = 3 # in percents
+contact_infection_probability = 80 # in percents
 
 # Differents counters 
 infected_count, healthy_count, recovered_count, death_count = 0,0,0,0
-# List of the number of infected person at differents timings
-list_infected_count = []
+# List of the people's status at different timings
+list_infected, list_healthy, list_dead, list_recovered =[], [], [], []
 
-# Handle display of the number of infected and non infected people
+# Handle display of the people's status
 def display_counts(infected_count, healthy_count, recovered_count, death_count):
+	# The rectangle in which the text is, is a surface
+	font_surface = pygame.Surface((160,120))
+	font_rect = font_surface.get_rect(x=0,y=0)
+	font_surface.fill(light_grey)
+	screen.blit(font_surface, font_rect)
+
 	# Same font for every text
 	font = pygame.font.SysFont(None, 35)
-	healthy_text = font.render(" Sains "+str(healthy_count), True, (0,255,0))
-	infected_text = font.render(" Malades "+str(infected_count), True, (255,0,0))
-	dead_text = font.render(" Morts "+str(death_count), True, (0,0,0))
-	recovered_text = font.render(" Guéris "+str(recovered_count), True, (0,0,255))
+
+	healthy_text = font.render(" Sains "+str(healthy_count), True, green)
+	infected_text = font.render(" Malades "+str(infected_count), True, red)
+	dead_text = font.render(" Morts "+str(death_count), True, black)
+	recovered_text = font.render(" Guéris "+str(recovered_count), True, blue)
+	# Display at different places
 	screen.blit(healthy_text, (0,0))
 	screen.blit(infected_text, (0,30))
 	screen.blit(dead_text, (0,60))
 	screen.blit(recovered_text, (0, 90))
 
-# Create people (some are already ill)
-for i in range(150):
-	if create_people(screen_size[0], screen_size[1], people_group, test_collide_group, people_dimensions).infected:
+# Create people (at least 1 is already ill)
+# Get_infected is used either to infect someone or to check if they are infected
+create_people(total_screen_size[0], total_screen_size[1], people_group, test_collide_group).get_infected()
+for i in range(population_size-1):
+	if random.randint(0,100) <= initial_infection_probability:
+		create_people(total_screen_size[0], total_screen_size[1], people_group, test_collide_group).get_infected()
 		infected_count+=1
+
 	else :
+		create_people(total_screen_size[0], total_screen_size[1], people_group, test_collide_group)
 		healthy_count +=1
-# Initial infected person 
-list_infected_count.append(infected_count)
+
+# Initial list values
+list_infected.append(infected_count)
+list_healthy.append(healthy_count)
+list_dead.append(death_count)
+list_recovered.append(recovered_count)
 
 # Gaming loop
 while running : 
 	delta_time = clock.tick(30)
 	time_in_game += delta_time
 	last_data_collect+=delta_time
+	last_display+=delta_time
+
+	# quit events
 	for event in pygame.event.get():
-		# quit events
 		if event.type == pygame.QUIT or (event.type == KEYDOWN and event.key == K_BACKSPACE) :
 			running = False
 			break
-	# Actualize list of sprites
+
+	# Actualize list of sprites and screen
 	population = pygame.sprite.Group.sprites(people_group)
-	screen.fill((255,255,255))
+	screen.fill(white)
 	
-	# Append a value to list
-	if last_data_collect>=1000 :
-		list_infected_count.append(infected_count)
-		last_data_collect = 0
+	# Append values to list every 0.5 second
+	if last_data_collect>=500 :
+		list_infected.append(infected_count)
+		list_healthy.append(healthy_count)
+		list_dead.append(death_count)
+		list_recovered.append(recovered_count)
 
 	# Tests for each sprite 
 	for people in population :
-		# If the person is sick
 		if people.infected :
 			# Count time infected
 			people.infected_time += delta_time
-			# After 4 secs, the person has one (unique) chance to die
-			if 4000<people.infected_time and not people.lucky :
+
+			# After a time (that is different for every people)
+			if standard_time_before_death + people.side_time < people.infected_time and not people.lucky :
 				hasard = random.randint(0,100)
 				# If the person is unlucky, it dies
-				if hasard <=3 :
+				if hasard <= probability_to_die :
 					people.infected=False
 					people.dead = True
-					people.surface.fill((0,0,0))
-
+					people.lucky = False
+					people.surface.fill(black)
+					# the people wont move anymore
 					infected_count-=1
 					death_count+=1
-					
-					# Note for later : maybe it should stop moving
-					people.move(people_speed, delta_time, screen_size)
 					people.draw(screen)
 					continue
-				# If the person is lucky, it can't die anymore
+
+				# the people has one (unique) chance to die
 				else :
 					people.lucky = True
 
-			# After 6secs, the person can recover
-			elif people.infected_time>6000 and not people.recovered and not people.dead: 
+			# The person recovers
+			elif  people.side_time + standard_infection_duration < people.infected_time and not people.recovered and not people.dead: 
 				# he is no longer infected and changes color
 				people.infected=False
 				people.recovered = True
-				people.surface.fill((0,0,255))
+				people.surface.fill(blue)
 
 				infected_count-=1
 				recovered_count+=1
 
-			# If it is still infectious
+			# The people is still infectious
 			else :
 				# Test if the sprite collides with another sprite (not himself)
 				test_collide_group.remove(people)
 				collide_list = pygame.sprite.spritecollide(people, test_collide_group, False)
 				if len(collide_list) != 0 :
 					for collided in collide_list :
-						# If the other is healthy (get_infect only works if it is the first time, and return True if so)
-						if collided.get_infected() : 
-							infected_count +=1
-							healthy_count-=1
+						# The person has a chance to not get infected
+						if contact_infection_probability<=random.randint(1,100):
+						# Test if the other is healthy
+							if collided.get_infected() : 
+								infected_count +=1
+								healthy_count-=1
 
-		people.move(people_speed, delta_time, screen_size)
+		people.move(delta_time, total_screen_size)
 		people.draw(screen)
+	# Reset the group for the next loop
 	pygame.sprite.Group.empty(test_collide_group)
 	test_collide_group = people_group.copy()
+
 	# Actualize counts and screen
 	display_counts(infected_count, healthy_count, recovered_count, death_count)
 	pygame.display.flip()
-	# Display graph at the end of the epidemic 
-	if time_in_game>=10000 and infected_count==0 and running :
-		graphic_display(time_in_game, list_infected_count)
 
+	# When the epidemic is over, the graph are displayed
+	if infected_count ==0 and time_in_game>5000:
+		# The data is collected for the last values
+		list_infected.append(infected_count)
+		list_healthy.append(healthy_count)
+		list_dead.append(death_count)
+		list_recovered.append(recovered_count)
+
+		raw_data, canvas = graphic_display(time_in_game, list_infected, list_healthy, list_dead, list_recovered)
+		size = canvas.get_width_height()
+		image_of_graphic = pygame.image.fromstring(raw_data, size, "RGB")
+		last_display = 0
+		screen.blit(image_of_graphic, (250,0))
+		pygame.display.flip()
+
+		plt.close('all')
+		displaying = True
+		# quit events
+		while displaying :
+			for event in pygame.event.get():
+				if event.type == pygame.QUIT or (event.type == KEYDOWN and event.key == K_BACKSPACE) :
+					running = False
+					displaing = False
+					break
+
+pygame.display.flip()
 pygame.quit()
