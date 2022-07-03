@@ -46,7 +46,7 @@ class People(pygame.sprite.Sprite):
 	# Move people unless it is dead
 	def move(self, delta_time, screen_size):
 		if self.dead :
-			self.direction =(0,0)
+			self.direction =[0,0]
 		# If it's coordinate are on the screen, they don't need to change
 		if max(self.dimensions[1],120)<self.rect[1]+self.dimensions[1]<screen_size[1] and max(self.dimensions[0],160)<self.rect[0]+self.dimensions[0]<screen_size[0] :
 			pass
